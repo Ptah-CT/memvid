@@ -1,0 +1,26 @@
+{
+  "name": "@xinfty/memvid-split",
+  "version": "0.1.0",
+  "description": "NAPI bindings for memvid-core split-file backend (.mv2d + .mv2x)",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "napi": {
+    "name": "memvid-split",
+    "triples": {
+      "defaults": true
+    }
+  },
+  "scripts": {
+    "build": "napi build --platform --release",
+    "build:debug": "napi build --platform",
+    "test": "node test.mjs"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^2"
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "*.node"
+  ]
+}
