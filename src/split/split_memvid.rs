@@ -200,6 +200,19 @@ impl SplitMemvid {
         self.index.set_logic_mesh(mesh);
     }
 
+    /// Add a single embedding vector for a frame. Call after computing the embedding.
+    pub fn add_vec(&mut self, frame_id: u64, embedding: Vec<f32>) -> Result<()> {
+        self.index.build_vec(std::iter::once((frame_id, embedding)))
+    }
+
+    /// Build the vector index from a batch of (frame_id, embedding) pairs.
+    pub fn build_vec_index(
+        &mut self,
+        embeddings: impl Iterator<Item = (u64, Vec<f32>)>,
+    ) -> Result<()> {
+        self.index.build_vec(embeddings)
+    }
+
     /// Rebuild the lex (full-text) index from all active frames in `.mv2d`.
     pub fn rebuild_lex_index(&mut self) -> Result<()> {
         let all = frame_jsonl::read_all_frames(&self.mv2d_path)?;

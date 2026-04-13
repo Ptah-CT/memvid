@@ -56,6 +56,10 @@ export declare class SplitStore {
   lexSearch(query: string, limit: number): Array<JsLexHit>
   /** Vector similarity search. */
   vecSearch(query: Array<number>, limit: number): Array<JsVecHit>
+  /** Add a precomputed embedding vector for a single frame. */
+  addVec(frameId: number, embedding: Array<number>): void
+  /** Build the vector index from a batch of (frame_id, embedding) pairs. */
+  buildVecIndex(frameIds: Array<number>, embeddings: Array<Array<number>>): void
   /** Rebuild the full-text (lex) index from all active frames. */
   rebuildLexIndex(): void
   /** Persist the current index to `.mv2x`. */

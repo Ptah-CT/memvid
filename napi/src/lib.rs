@@ -180,6 +180,24 @@ impl SplitStore {
             .collect()
     }
 
+    /// Add a precomputed embedding vector for a single frame.
+    #[napi]
+    pub fn add_vec(&mut self, frame_id: i64, embedding: Vec<f64>) -> Result<()> {
+        let embedding_f32: Vec<f32> = embedding.iter().map(|&v| v as f32).collect();
+        self.inner.add_vec(frame_id as u64, embedding_f32)
+            .map_err(|e| Error::from_reason(format!("{e}")))
+    }
+
+    /// Build the vector index from a batch of (frame_id, embedding) pairs.
+    #[napi]
+    pub fn build_vec_index(&mut self, frame_ids: Vec<i64>, embeddings: Vec<Vec<f64>>) -> Result<()> {
+        let pairs = frame_ids.into_iter().zip(embeddings).map(|(fid, emb)| {
+            (fid as u64, emb.iter().map(|&v| v as f32).collect::<Vec<f32>>())
+        });
+        self.inner.build_vec_index(pairs)
+            .map_err(|e| Error::from_reason(format!("{e}")))
+    }
+
     /// Rebuild the full-text (lex) index from all active frames.
     #[napi]
     pub fn rebuild_lex_index(&mut self) -> Result<()> {
