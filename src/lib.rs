@@ -100,6 +100,7 @@ mod toc;
 pub mod types;
 pub mod vec;
 pub mod vec_pq;
+pub mod split;
 
 // SIMD-accelerated distance calculations
 pub mod simd;
