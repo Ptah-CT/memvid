@@ -173,8 +173,53 @@ impl SplitMemvid {
             .collect()
     }
 
+    // -- Search --
+
+    /// Full-text search over frame contents.
+    pub fn lex_search(&mut self, query: &str, limit: usize) -> Vec<crate::lex::LexSearchHit> {
+        self.index.lex_search(query, limit)
+    }
+
+    /// Vector similarity search over frame embeddings.
+    pub fn vec_search(&self, query: &[f32], limit: usize) -> Vec<crate::vec::VecSearchHit> {
+        self.index.vec_search(query, limit)
+    }
+
+    /// Access the knowledge graph (LogicMesh).
+    pub fn logic_mesh(&mut self) -> Option<&crate::types::logic_mesh::LogicMesh> {
+        self.index.logic_mesh()
+    }
+
+    /// Access the knowledge graph mutably (for adding nodes/edges).
+    pub fn logic_mesh_mut(&mut self) -> Option<&mut crate::types::logic_mesh::LogicMesh> {
+        self.index.logic_mesh_mut()
+    }
+
+    /// Set or replace the knowledge graph.
+    pub fn set_logic_mesh(&mut self, mesh: crate::types::logic_mesh::LogicMesh) {
+        self.index.set_logic_mesh(mesh);
+    }
+
+    /// Rebuild the lex (full-text) index from all active frames in `.mv2d`.
+    pub fn rebuild_lex_index(&mut self) -> Result<()> {
+        let all = frame_jsonl::read_all_frames(&self.mv2d_path)?;
+        let active: Vec<_> = all.into_iter()
+            .map(|(_, f)| f)
+            .filter(|f| f.is_active() && !self.inactive_frames.contains(&f.frame_id))
+            .collect();
+        self.index.build_lex(active.iter())
+    }
+
+    /// Set vec index from precomputed embeddings.
+    pub fn set_vec_embeddings(
+        &mut self,
+        embeddings: impl Iterator<Item = (u64, Vec<f32>)>,
+    ) -> Result<()> {
+        self.index.build_vec(embeddings)
+    }
+
     /// Persist the current index to `.mv2x`.
-    pub fn flush_index(&self) -> Result<()> {
+    pub fn flush_index(&mut self) -> Result<()> {
         self.index.write_to(&self.mv2x_path)
     }
 
