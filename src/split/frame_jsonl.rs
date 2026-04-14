@@ -145,7 +145,10 @@ pub fn read_all_frames(path: &Path) -> Result<Vec<(u64, FrameJsonl)>> {
 
 /// Read the last frame_id from a `.mv2d` file (for next-ID determination).
 ///
-/// Reads the file backwards to find the last newline-terminated JSON line.
+/// Scans backwards in fixed-size chunks until two newlines are found (or the
+/// start of the file is reached). This tolerates arbitrarily long lines —
+/// earlier implementations capped the read at 4 KB / 64 KB and silently
+/// truncated lines longer than that, which then failed JSON parsing.
 pub fn last_frame_id(path: &Path) -> Result<Option<u64>> {
     let file = File::open(path)?;
     let metadata = file.metadata()?;
@@ -155,25 +158,56 @@ pub fn last_frame_id(path: &Path) -> Result<Option<u64>> {
         return Ok(None);
     }
 
-    // Read the last ~4KB to find the last complete line
-    let read_size = file_size.min(4096);
+    const CHUNK: u64 = 8192;
     let mut reader = BufReader::new(file);
-    reader.seek(SeekFrom::Start(file_size - read_size))?;
+    let mut tail: Vec<u8> = Vec::new();
+    let mut pos = file_size;
 
-    let mut buf = vec![0u8; read_size as usize];
-    reader.read_exact(&mut buf)?;
+    // Read chunks from the end until we have at least one full line we can
+    // isolate (i.e., a `\n` preceded by more data or the start of file).
+    loop {
+        let chunk_size = pos.min(CHUNK);
+        let start = pos - chunk_size;
+        reader.seek(SeekFrom::Start(start))?;
+        let mut buf = vec![0u8; chunk_size as usize];
+        reader.read_exact(&mut buf)?;
 
-    // Find last complete line (between last two newlines)
-    let text = String::from_utf8_lossy(&buf);
-    let last_line = text.trim_end().rsplit('\n').next();
+        // Prepend: we're moving backwards.
+        buf.extend_from_slice(&tail);
+        tail = buf;
+        pos = start;
 
-    match last_line {
-        Some(line) if !line.is_empty() => {
-            let frame: FrameJsonl = serde_json::from_str(line)
-                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-            Ok(Some(frame.frame_id))
+        // Strip trailing newlines, then look for the preceding newline to
+        // delimit the last complete line.
+        let trimmed_end = tail.iter().rposition(|&b| b != b'\n' && b != b'\r');
+        let content = match trimmed_end {
+            Some(end) => &tail[..=end],
+            None => {
+                // Nothing but newlines in the whole read-so-far.
+                if pos == 0 { return Ok(None); }
+                continue;
+            }
+        };
+        let newline_pos = content.iter().rposition(|&b| b == b'\n');
+        let last_line_bytes = match (newline_pos, pos) {
+            (Some(p), _) => &content[p + 1..],
+            (None, 0) => content, // reached start of file, the whole thing is one line
+            (None, _) => { continue; } // need to read more from earlier in the file
+        };
+
+        let line = std::str::from_utf8(last_line_bytes).map_err(|e| {
+            io::Error::new(io::ErrorKind::InvalidData, format!("non-utf8 in {}: {}", path.display(), e))
+        })?;
+        if line.is_empty() {
+            return Ok(None);
         }
-        _ => Ok(None),
+        let frame: FrameJsonl = serde_json::from_str(line).map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("corrupt last frame in {}: {}", path.display(), e),
+            )
+        })?;
+        return Ok(Some(frame.frame_id));
     }
 }
 
